@@ -8,3 +8,4 @@ enable_testing()
 
 add_subdirectory(01_log_parser)
 add_subdirectory(02_gtest_reporter)
+add_subdirectory(03_can_parser)
