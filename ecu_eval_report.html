@@ -45,12 +45,16 @@
     .badge-warn  { background: #2d1e00; color: #d29922; border: 1px solid #9e6a03; }
     .badge-error { background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c; }
     .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .stat-row-spaced { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
     .stat {
         background: #0d1117; border: 1px solid #21262d;
         border-radius: 4px; padding: 8px 16px; min-width: 120px;
     }
     .stat-label { font-size: 11px; color: #8b949e; margin-bottom: 2px; }
     .stat-value { font-size: 22px; font-weight: 700; color: #58a6ff; }
+    .stat-value.alert { color: #f85149; }
+    .stat-value.pass  { color: #3fb950; }
+    .stat-value.fail  { color: #f85149; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
     .data-table th {
         background: #21262d; color: #8b949e; font-weight: 600;
@@ -78,12 +82,12 @@
         text-align: center; padding: 16px; margin-top: 8px;
         font-size: 11px; color: #484f58; border-top: 1px solid #21262d;
     }
-    </style>
+</style>
 </head>
 <body>
 <div class="header">
   <h1>ECU Evaluation Dashboard</h1>
-  <div class="meta">Environment: <strong>SiLS</strong> &nbsp;|&nbsp; 2026-06-29 17:02:48</div>
+  <div class="meta">Environment: <strong>SiLS</strong> &nbsp;|&nbsp; 2026-06-29 18:13:27</div>
 </div>
 <div class="overall-bar overall-warn">CHECK REQUIRED</div>
 <div class="container">
@@ -93,7 +97,7 @@
       <span class="section-title">01 &mdash; ECU Log Parser</span>
       <span class="badge badge-ok">OK</span>
     </div>
-    <div class="section-body"><div class="stat-row"><div class="stat"><div class="stat-label">Total Entries</div><div class="stat-value">7</div></div><div class="stat"><div class="stat-label">ENGINE &gt; 6000 Alerts</div><div class="stat-value" style="color:#f85149">2</div></div></div></div>
+    <div class="section-body"><div class="stat-row"><div class="stat"><div class="stat-label">Total Entries</div><div class="stat-value">7</div></div><div class="stat"><div class="stat-label">ENGINE &gt; 6000 Alerts</div><div class="stat-value alert">2</div></div></div></div>
   </div>
 
   <div class="section">
@@ -101,7 +105,7 @@
       <span class="section-title">02 &mdash; GTest Reporter &mdash; Requirement Traceability</span>
       <span class="badge badge-warn">1 FAILED</span>
     </div>
-    <div class="section-body"><div class="stat-row" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Total</div><div class="stat-value">5</div></div><div class="stat"><div class="stat-label">Passed</div><div class="stat-value" style="color:#3fb950">4</div></div><div class="stat"><div class="stat-label">Failed</div><div class="stat-value" style="color:#f85149">1</div></div></div><table class="data-table"><thead><tr><th>Suite</th><th>Test</th><th>Requirement</th><th>Result</th><th>Time (ms)</th></tr></thead><tbody><tr class="tr-pass"><td>EngineTest</td><td>NormalRPM_REQ001</td><td class="req-id">REQ001</td><td><span class="result-pass">PASS</span></td><td>0.01</td></tr><tr class="tr-fail"><td>EngineTest</td><td>OverRPM_REQ002</td><td class="req-id">REQ002</td><td><span class="result-fail">FAIL</span></td><td>0.25</td></tr><tr class="tr-pass"><td>BrakeTest</td><td>NormalPressure_REQ010</td><td class="req-id">REQ010</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr><tr class="tr-pass"><td>BrakeTest</td><td>EmergencyBrake_REQ011</td><td class="req-id">REQ011</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr><tr class="tr-pass"><td>ThermalTest</td><td>CoolantTemp_REQ020</td><td class="req-id">REQ020</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr></tbody></table></div>
+    <div class="section-body"><div class="stat-row stat-row-spaced"><div class="stat"><div class="stat-label">Total</div><div class="stat-value">5</div></div><div class="stat"><div class="stat-label">Passed</div><div class="stat-value pass">4</div></div><div class="stat"><div class="stat-label">Failed</div><div class="stat-value fail">1</div></div></div><table class="data-table"><thead><tr><th>Suite</th><th>Test</th><th>Requirement</th><th>Result</th><th>Time (ms)</th></tr></thead><tbody><tr class="tr-pass"><td>EngineTest</td><td>NormalRPM_REQ001</td><td class="req-id">REQ001</td><td><span class="result-pass">PASS</span></td><td>0.01</td></tr><tr class="tr-fail"><td>EngineTest</td><td>OverRPM_REQ002</td><td class="req-id">REQ002</td><td><span class="result-fail">FAIL</span></td><td>0.24</td></tr><tr class="tr-pass"><td>BrakeTest</td><td>NormalPressure_REQ010</td><td class="req-id">REQ010</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr><tr class="tr-pass"><td>BrakeTest</td><td>EmergencyBrake_REQ011</td><td class="req-id">REQ011</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr><tr class="tr-pass"><td>ThermalTest</td><td>CoolantTemp_REQ020</td><td class="req-id">REQ020</td><td><span class="result-pass">PASS</span></td><td>0.00</td></tr></tbody></table></div>
   </div>
 
   <div class="section">
@@ -109,7 +113,7 @@
       <span class="section-title">03 &mdash; CAN Frame Parser</span>
       <span class="badge badge-ok">OK</span>
     </div>
-    <div class="section-body"><div class="stat-row" style="margin-bottom:16px"><div class="stat"><div class="stat-label">Decoded Frames</div><div class="stat-value">4</div></div><div class="stat"><div class="stat-label">Unknown IDs</div><div class="stat-value">1</div></div></div><pre class="code-block">=== CAN Frame Decoder ===
+    <div class="section-body"><div class="stat-row stat-row-spaced"><div class="stat"><div class="stat-label">Decoded Frames</div><div class="stat-value">4</div></div><div class="stat"><div class="stat-label">Unknown IDs</div><div class="stat-value">1</div></div></div><pre class="code-block">=== CAN Frame Decoder ===
 
 Frame 0C1#1A005A00000000
   ENGINE_RPM       = 1664.00 rpm
