@@ -22,6 +22,7 @@ DEFAULT_BUILD_DIR = SCRIPT_DIR / "build"
 # ──────────────────────────────────────────────
 
 MSYS2_BIN = r"C:\msys64\mingw64\bin"
+EXE = ".exe" if __import__("sys").platform == "win32" else ""
 
 
 def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
@@ -39,7 +40,7 @@ def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
 
 
 def run_log_parser(build_dir: Path) -> dict:
-    binary = build_dir / "01_log_parser" / "log_parser_bin.exe"
+    binary = build_dir / "01_log_parser" / f"log_parser_bin{EXE}"
     sample  = SCRIPT_DIR / "01_log_parser" / "sample.log"
 
     if not binary.exists():
@@ -50,15 +51,21 @@ def run_log_parser(build_dir: Path) -> dict:
     total = alerts = 0
     for line in out.splitlines():
         if "Total entries" in line:
-            total = int(line.split(":")[-1].strip())
+            try:
+                total = int(line.split(":")[-1].strip())
+            except ValueError:
+                pass
         if "ENGINE > 6000" in line:
-            alerts = int(line.split(":")[-1].strip())
+            try:
+                alerts = int(line.split(":")[-1].strip())
+            except ValueError:
+                pass
 
     return {"status": "ok", "total_entries": total, "alerts": alerts, "raw": out}
 
 
 def run_gtest(build_dir: Path, env_tag: str) -> dict:
-    binary = build_dir / "02_gtest_reporter" / "sample_ecu_test.exe"
+    binary = build_dir / "02_gtest_reporter" / f"sample_ecu_test{EXE}"
 
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
@@ -88,7 +95,7 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
 
 
 def run_can_parser(build_dir: Path) -> dict:
-    binary = build_dir / "03_can_parser" / "can_parser_bin.exe"
+    binary = build_dir / "03_can_parser" / f"can_parser_bin{EXE}"
     sample  = SCRIPT_DIR / "03_can_parser" / "sample.can"
 
     if not binary.exists():
@@ -108,10 +115,10 @@ def run_can_parser(build_dir: Path) -> dict:
 
 def _icon(r: dict) -> str:
     if r.get("status") == "error":
-        return "ERROR"
+        return "❌ ERROR"
     if r.get("failed", 0) > 0:
-        return f"WARN {r['failed']} FAILED"
-    return "OK"
+        return f"⚠️ {r['failed']} FAILED"
+    return "✅ OK"
 
 
 def generate_report(results: dict, env_tag: str, output: Path):
@@ -173,6 +180,13 @@ def generate_report(results: dict, env_tag: str, output: Path):
     output.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _h(s: str) -> str:
+    return (s.replace("&", "&amp;")
+              .replace("<", "&lt;")
+              .replace(">", "&gt;")
+              .replace('"', "&quot;"))
+
+
 # ──────────────────────────────────────────────
 # HTML ダッシュボード生成
 # ──────────────────────────────────────────────
@@ -211,7 +225,7 @@ def _html_badge(status: str, failed: int = 0) -> str:
 
 
 def _html_result_cell(result: str) -> str:
-    if "PASS" in result:
+    if result.strip().endswith("PASS"):
         return '<td><span class="result-pass">PASS</span></td>'
     return '<td><span class="result-fail">FAIL</span></td>'
 
@@ -241,11 +255,11 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
             row_class = "tr-pass" if is_pass else "tr-fail"
             rows_html += (
                 f'<tr class="{row_class}">'
-                f'<td>{row.get("Suite","")}</td>'
-                f'<td>{row.get("Test","")}</td>'
-                f'<td class="req-id">{row.get("Requirement","")}</td>'
+                f'<td>{_h(row.get("Suite",""))}</td>'
+                f'<td>{_h(row.get("Test",""))}</td>'
+                f'<td class="req-id">{_h(row.get("Requirement",""))}</td>'
                 + _html_result_cell(result) +
-                f'<td>{row.get("Time (ms)","")}</td>'
+                f'<td>{_h(row.get("Time (ms)",""))}</td>'
                 f'</tr>'
             )
         gtest_table_html = (
@@ -267,7 +281,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         can_output_html = f'<pre class="code-block">{escaped}</pre>'
 
     if log_r.get("status") == "error":
-        log_body = f'<div class="err-msg">{log_r.get("message","")}</div>'
+        log_body = f'<div class="err-msg">{_h(log_r.get("message",""))}</div>'
     else:
         alerts = log_r.get("alerts", 0)
         alert_style = ' style="color:#f85149"' if alerts > 0 else ""
@@ -281,7 +295,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         )
 
     if gt_r.get("status") == "error":
-        gt_body = f'<div class="err-msg">{gt_r.get("message","")}</div>'
+        gt_body = f'<div class="err-msg">{_h(gt_r.get("message",""))}</div>'
     else:
         total = gt_r.get("passed", 0) + gt_r.get("failed", 0)
         gt_body = (
@@ -296,7 +310,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         )
 
     if can_r.get("status") == "error":
-        can_body = f'<div class="err-msg">{can_r.get("message","")}</div>'
+        can_body = f'<div class="err-msg">{_h(can_r.get("message",""))}</div>'
     else:
         can_body = (
             '<div class="stat-row" style="margin-bottom:16px">'
@@ -443,7 +457,7 @@ def main():
     parser.add_argument("--build-dir", default=None,
                         help="ビルドディレクトリ (default: ./build)")
     parser.add_argument("--output", default="ecu_eval_report.md",
-                        help="出力レポートファイル名 (default: ecu_eval_report.md)")
+                        help="出力レポートファイル名 (default: ecu_eval_report.md); also generates .html dashboard with the same stem")
     args = parser.parse_args()
 
     build_dir   = Path(args.build_dir) if args.build_dir else DEFAULT_BUILD_DIR

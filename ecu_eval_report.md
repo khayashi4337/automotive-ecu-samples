@@ -3,15 +3,15 @@
 | Item | Value |
 |---|---|
 | Environment | SiLS |
-| Date        | 2026-06-29 16:39:59 |
+| Date        | 2026-06-29 16:47:43 |
 
 ## Overall Status
 
 | Tool | Result |
 |---|---|
-| 01 Log Parser     | OK |
-| 02 GTest Reporter | WARN 1 FAILED |
-| 03 CAN Parser     | OK |
+| 01 Log Parser     | ✅ OK |
+| 02 GTest Reporter | ⚠️ 1 FAILED |
+| 03 CAN Parser     | ✅ OK |
 
 ## 1. ECU Log Parser
 
@@ -27,7 +27,7 @@
 | Suite | Test | Requirement | Result | Time (ms) |
 |---|---|---|---|---|
 | EngineTest | NormalRPM_REQ001 | REQ001 | ✅ PASS | 0.01 |
-| EngineTest | OverRPM_REQ002 | REQ002 | ❌ FAIL | 0.36 |
+| EngineTest | OverRPM_REQ002 | REQ002 | ❌ FAIL | 0.30 |
 | BrakeTest | NormalPressure_REQ010 | REQ010 | ✅ PASS | 0.00 |
 | BrakeTest | EmergencyBrake_REQ011 | REQ011 | ✅ PASS | 0.00 |
 | ThermalTest | CoolantTemp_REQ020 | REQ020 | ✅ PASS | 0.00 |
