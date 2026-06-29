@@ -24,6 +24,25 @@ DEFAULT_BUILD_DIR = SCRIPT_DIR / "build"
 MSYS2_BIN = r"C:\msys64\mingw64\bin"
 EXE = ".exe" if sys.platform == "win32" else ""
 
+# バイナリ／サンプルファイルのパス定義（1か所で変更できるようにまとめる）
+_TOOL = {
+    "log_parser": {
+        "subdir": "01_log_parser",
+        "binary": f"log_parser_bin{EXE}",
+        "sample": Path("01_log_parser") / "sample.log",
+    },
+    "gtest": {
+        "subdir": "02_gtest_reporter",
+        "binary": f"sample_ecu_test{EXE}",
+        "report":  Path("02_gtest_reporter") / "ecu_test_report.md",
+    },
+    "can_parser": {
+        "subdir": "03_can_parser",
+        "binary": f"can_parser_bin{EXE}",
+        "sample": Path("03_can_parser") / "sample.can",
+    },
+}
+
 
 def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
     run_env = os.environ.copy()
@@ -40,8 +59,9 @@ def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
 
 
 def run_log_parser(build_dir: Path) -> dict:
-    binary = build_dir / "01_log_parser" / f"log_parser_bin{EXE}"
-    sample  = SCRIPT_DIR / "01_log_parser" / "sample.log"
+    t = _TOOL["log_parser"]
+    binary = build_dir / t["subdir"] / t["binary"]
+    sample  = SCRIPT_DIR / t["sample"]
 
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
@@ -67,13 +87,14 @@ def run_log_parser(build_dir: Path) -> dict:
 
 
 def run_gtest(build_dir: Path, env_tag: str) -> dict:
-    binary = build_dir / "02_gtest_reporter" / f"sample_ecu_test{EXE}"
+    t = _TOOL["gtest"]
+    binary = build_dir / t["subdir"] / t["binary"]
 
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
 
     rc, out, err = _run([str(binary)], env={"ECU_TEST_ENV": env_tag},
-                        cwd=build_dir / "02_gtest_reporter")
+                        cwd=build_dir / t["subdir"])
     if rc not in (0, 1):
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}",
                 "passed": 0, "failed": 0, "report_md": "", "raw": out}
@@ -88,7 +109,7 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
             failed = int(m.group(1))
 
     report_md = ""
-    report_file = build_dir / "02_gtest_reporter" / "ecu_test_report.md"
+    report_file = build_dir / t["report"]
     if report_file.exists():
         report_md = report_file.read_text(encoding="utf-8")
 
@@ -100,8 +121,9 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
 
 
 def run_can_parser(build_dir: Path) -> dict:
-    binary = build_dir / "03_can_parser" / f"can_parser_bin{EXE}"
-    sample  = SCRIPT_DIR / "03_can_parser" / "sample.can"
+    t = _TOOL["can_parser"]
+    binary = build_dir / t["subdir"] / t["binary"]
+    sample  = SCRIPT_DIR / t["sample"]
 
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
@@ -110,8 +132,9 @@ def run_can_parser(build_dir: Path) -> dict:
     if rc != 0:
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
-    decoded = sum(1 for l in out.splitlines() if l.startswith("Frame"))
-    unknown = sum(1 for l in out.splitlines() if "unknown ID" in l)
+    lines = out.splitlines()
+    decoded = sum(1 for line in lines if line.startswith("Frame"))
+    unknown = sum(1 for line in lines if "unknown ID" in line)
 
     return {"status": "ok", "decoded": decoded, "unknown": unknown, "raw": out}
 
@@ -197,6 +220,86 @@ def _h(s: str) -> str:
 # ──────────────────────────────────────────────
 # HTML ダッシュボード生成
 # ──────────────────────────────────────────────
+
+_DASHBOARD_CSS = """
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        background: #0d1117; color: #e6edf3;
+        font-family: 'Courier New', Consolas, monospace;
+        font-size: 14px; line-height: 1.6;
+    }
+    .header {
+        background: #161b22; border-bottom: 2px solid #21262d;
+        padding: 18px 32px;
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    .header h1 { font-size: 18px; font-weight: 700; color: #58a6ff; letter-spacing: 1px; }
+    .header .meta { font-size: 12px; color: #8b949e; }
+    .header .meta strong { color: #c9d1d9; }
+    .overall-bar {
+        padding: 10px 32px; font-size: 13px; font-weight: 700;
+        letter-spacing: 2px; text-align: center;
+    }
+    .overall-ok   { background: #0d2218; color: #3fb950; border-bottom: 1px solid #2ea043; }
+    .overall-warn { background: #2d1e00; color: #d29922; border-bottom: 1px solid #9e6a03; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 32px; }
+    .section {
+        background: #161b22; border: 1px solid #30363d;
+        border-radius: 6px; margin-bottom: 20px; overflow: hidden;
+    }
+    .section-header {
+        background: #21262d; padding: 10px 18px;
+        display: flex; align-items: center; gap: 12px;
+        border-bottom: 1px solid #30363d;
+    }
+    .section-title { font-size: 13px; font-weight: 700; color: #c9d1d9; letter-spacing: 0.5px; }
+    .section-body { padding: 16px 20px; }
+    .badge {
+        display: inline-block; padding: 2px 10px; border-radius: 12px;
+        font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .badge-ok    { background: #0d2218; color: #3fb950; border: 1px solid #2ea043; }
+    .badge-warn  { background: #2d1e00; color: #d29922; border: 1px solid #9e6a03; }
+    .badge-error { background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c; }
+    .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .stat {
+        background: #0d1117; border: 1px solid #21262d;
+        border-radius: 4px; padding: 8px 16px; min-width: 120px;
+    }
+    .stat-label { font-size: 11px; color: #8b949e; margin-bottom: 2px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: #58a6ff; }
+    .stat-value.alert { color: #f85149; }
+    .stat-value.pass  { color: #3fb950; }
+    .stat-value.fail  { color: #f85149; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+    .data-table th {
+        background: #21262d; color: #8b949e; font-weight: 600;
+        padding: 7px 12px; text-align: left; border-bottom: 1px solid #30363d;
+    }
+    .data-table td { padding: 7px 12px; border-bottom: 1px solid #21262d; }
+    .tr-pass { border-left: 3px solid #2ea043; }
+    .tr-fail { border-left: 3px solid #b91c1c; background: rgba(248,81,73,0.04); }
+    .result-pass {
+        background: #0d2218; color: #3fb950; border: 1px solid #2ea043;
+        padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;
+    }
+    .result-fail {
+        background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c;
+        padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;
+    }
+    .req-id { color: #79c0ff; font-weight: 600; }
+    .code-block {
+        background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+        padding: 12px 16px; font-size: 12px; color: #8b949e;
+        overflow-x: auto; white-space: pre; margin-top: 4px;
+    }
+    .err-msg { color: #f85149; font-size: 13px; }
+    .footer {
+        text-align: center; padding: 16px; margin-top: 8px;
+        font-size: 11px; color: #484f58; border-top: 1px solid #21262d;
+    }
+"""
+
 
 def _parse_md_table(md_text: str, section_header: str) -> list:
     lines = md_text.splitlines()
@@ -325,82 +428,6 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
             f'</div>{can_output_html}'
         )
 
-    css = """
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-        background: #0d1117; color: #e6edf3;
-        font-family: 'Courier New', Consolas, monospace;
-        font-size: 14px; line-height: 1.6;
-    }
-    .header {
-        background: #161b22; border-bottom: 2px solid #21262d;
-        padding: 18px 32px;
-        display: flex; align-items: center; justify-content: space-between;
-    }
-    .header h1 { font-size: 18px; font-weight: 700; color: #58a6ff; letter-spacing: 1px; }
-    .header .meta { font-size: 12px; color: #8b949e; }
-    .header .meta strong { color: #c9d1d9; }
-    .overall-bar {
-        padding: 10px 32px; font-size: 13px; font-weight: 700;
-        letter-spacing: 2px; text-align: center;
-    }
-    .overall-ok   { background: #0d2218; color: #3fb950; border-bottom: 1px solid #2ea043; }
-    .overall-warn { background: #2d1e00; color: #d29922; border-bottom: 1px solid #9e6a03; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 32px; }
-    .section {
-        background: #161b22; border: 1px solid #30363d;
-        border-radius: 6px; margin-bottom: 20px; overflow: hidden;
-    }
-    .section-header {
-        background: #21262d; padding: 10px 18px;
-        display: flex; align-items: center; gap: 12px;
-        border-bottom: 1px solid #30363d;
-    }
-    .section-title { font-size: 13px; font-weight: 700; color: #c9d1d9; letter-spacing: 0.5px; }
-    .section-body { padding: 16px 20px; }
-    .badge {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-    }
-    .badge-ok    { background: #0d2218; color: #3fb950; border: 1px solid #2ea043; }
-    .badge-warn  { background: #2d1e00; color: #d29922; border: 1px solid #9e6a03; }
-    .badge-error { background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c; }
-    .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
-    .stat {
-        background: #0d1117; border: 1px solid #21262d;
-        border-radius: 4px; padding: 8px 16px; min-width: 120px;
-    }
-    .stat-label { font-size: 11px; color: #8b949e; margin-bottom: 2px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: #58a6ff; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
-    .data-table th {
-        background: #21262d; color: #8b949e; font-weight: 600;
-        padding: 7px 12px; text-align: left; border-bottom: 1px solid #30363d;
-    }
-    .data-table td { padding: 7px 12px; border-bottom: 1px solid #21262d; }
-    .tr-pass { border-left: 3px solid #2ea043; }
-    .tr-fail { border-left: 3px solid #b91c1c; background: rgba(248,81,73,0.04); }
-    .result-pass {
-        background: #0d2218; color: #3fb950; border: 1px solid #2ea043;
-        padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;
-    }
-    .result-fail {
-        background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c;
-        padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;
-    }
-    .req-id { color: #79c0ff; font-weight: 600; }
-    .code-block {
-        background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
-        padding: 12px 16px; font-size: 12px; color: #8b949e;
-        overflow-x: auto; white-space: pre; margin-top: 4px;
-    }
-    .err-msg { color: #f85149; font-size: 13px; }
-    .footer {
-        text-align: center; padding: 16px; margin-top: 8px;
-        font-size: 11px; color: #484f58; border-top: 1px solid #21262d;
-    }
-    """
-
     html = (
         '<!DOCTYPE html>\n'
         '<html lang="ja">\n'
@@ -408,7 +435,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         '<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
         f'<title>ECU Evaluation Dashboard</title>\n'
-        f'<style>{css}</style>\n'
+        f'<style>{_DASHBOARD_CSS}</style>\n'
         '</head>\n'
         '<body>\n'
         '<div class="header">\n'
