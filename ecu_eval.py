@@ -262,6 +262,7 @@ _DASHBOARD_CSS = """
     .badge-warn  { background: #2d1e00; color: #d29922; border: 1px solid #9e6a03; }
     .badge-error { background: #2a0f0f; color: #f85149; border: 1px solid #b91c1c; }
     .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .stat-row-spaced { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
     .stat {
         background: #0d1117; border: 1px solid #21262d;
         border-radius: 4px; padding: 8px 16px; min-width: 120px;
@@ -340,13 +341,85 @@ def _html_result_cell(result: str) -> str:
     return '<td><span class="result-fail">FAIL</span></td>'
 
 
+def _build_gtest_table(gtest_rows: list) -> str:
+    if not gtest_rows:
+        return ""
+    rows_html = ""
+    for row in gtest_rows:
+        result = row.get("Result", "")
+        row_class = "tr-pass" if result.strip().endswith("PASS") else "tr-fail"
+        rows_html += (
+            f'<tr class="{row_class}">'
+            f'<td>{_h(row.get("Suite",""))}</td>'
+            f'<td>{_h(row.get("Test",""))}</td>'
+            f'<td class="req-id">{_h(row.get("Requirement",""))}</td>'
+            + _html_result_cell(result) +
+            f'<td>{_h(row.get("Time (ms)",""))}</td>'
+            f'</tr>'
+        )
+    return (
+        '<table class="data-table">'
+        '<thead><tr>'
+        '<th>Suite</th><th>Test</th><th>Requirement</th>'
+        '<th>Result</th><th>Time (ms)</th>'
+        '</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table>'
+    )
+
+
+def _log_section_body(log_r: dict) -> str:
+    if log_r.get("status") == "error":
+        return f'<div class="err-msg">{_h(log_r.get("message",""))}</div>'
+    alerts = log_r.get("alerts", 0)
+    alert_class = ' class="stat-value alert"' if alerts > 0 else ' class="stat-value"'
+    return (
+        '<div class="stat-row">'
+        '<div class="stat"><div class="stat-label">Total Entries</div>'
+        f'<div class="stat-value">{log_r.get("total_entries",0)}</div></div>'
+        '<div class="stat"><div class="stat-label">ENGINE &gt; 6000 Alerts</div>'
+        f'<div{alert_class}>{alerts}</div></div>'
+        '</div>'
+    )
+
+
+def _gtest_section_body(gt_r: dict) -> str:
+    if gt_r.get("status") == "error":
+        return f'<div class="err-msg">{_h(gt_r.get("message",""))}</div>'
+    total = gt_r.get("passed", 0) + gt_r.get("failed", 0)
+    gtest_rows = _parse_md_table(gt_r.get("report_md", ""), "Test Details")
+    table_html = _build_gtest_table(gtest_rows)
+    return (
+        '<div class="stat-row stat-row-spaced">'
+        '<div class="stat"><div class="stat-label">Total</div>'
+        f'<div class="stat-value">{total}</div></div>'
+        '<div class="stat"><div class="stat-label">Passed</div>'
+        f'<div class="stat-value pass">{gt_r.get("passed",0)}</div></div>'
+        '<div class="stat"><div class="stat-label">Failed</div>'
+        f'<div class="stat-value fail">{gt_r.get("failed",0)}</div></div>'
+        f'</div>{table_html}'
+    )
+
+
+def _can_section_body(can_r: dict) -> str:
+    if can_r.get("status") == "error":
+        return f'<div class="err-msg">{_h(can_r.get("message",""))}</div>'
+    raw_html = f'<pre class="code-block">{_h(can_r["raw"])}</pre>' if can_r.get("raw") else ""
+    return (
+        '<div class="stat-row stat-row-spaced">'
+        '<div class="stat"><div class="stat-label">Decoded Frames</div>'
+        f'<div class="stat-value">{can_r.get("decoded",0)}</div></div>'
+        '<div class="stat"><div class="stat-label">Unknown IDs</div>'
+        f'<div class="stat-value">{can_r.get("unknown",0)}</div></div>'
+        f'</div>{raw_html}'
+    )
+
+
 def generate_html_report(results: dict, env_tag: str, output: Path):
     log_r = results["log_parser"]
     gt_r  = results["gtest"]
     can_r = results["can_parser"]
     now   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    gtest_rows = _parse_md_table(gt_r.get("report_md", ""), "Test Details")
 
     all_ok = (
         log_r.get("status") == "ok" and
@@ -357,76 +430,9 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
     overall_class = "overall-ok" if all_ok else "overall-warn"
     overall_text  = "ALL PASS" if all_ok else "CHECK REQUIRED"
 
-    gtest_table_html = ""
-    if gtest_rows:
-        rows_html = ""
-        for row in gtest_rows:
-            result = row.get("Result", "")
-            is_pass = result.strip().endswith("PASS")
-            row_class = "tr-pass" if is_pass else "tr-fail"
-            rows_html += (
-                f'<tr class="{row_class}">'
-                f'<td>{_h(row.get("Suite",""))}</td>'
-                f'<td>{_h(row.get("Test",""))}</td>'
-                f'<td class="req-id">{_h(row.get("Requirement",""))}</td>'
-                + _html_result_cell(result) +
-                f'<td>{_h(row.get("Time (ms)",""))}</td>'
-                f'</tr>'
-            )
-        gtest_table_html = (
-            '<table class="data-table">'
-            '<thead><tr>'
-            '<th>Suite</th><th>Test</th><th>Requirement</th>'
-            '<th>Result</th><th>Time (ms)</th>'
-            '</tr></thead>'
-            f'<tbody>{rows_html}</tbody>'
-            '</table>'
-        )
-
-    can_output_html = ""
-    if can_r.get("raw"):
-        can_output_html = f'<pre class="code-block">{_h(can_r["raw"])}</pre>'
-
-    if log_r.get("status") == "error":
-        log_body = f'<div class="err-msg">{_h(log_r.get("message",""))}</div>'
-    else:
-        alerts = log_r.get("alerts", 0)
-        alert_style = ' style="color:#f85149"' if alerts > 0 else ""
-        log_body = (
-            '<div class="stat-row">'
-            '<div class="stat"><div class="stat-label">Total Entries</div>'
-            f'<div class="stat-value">{log_r.get("total_entries",0)}</div></div>'
-            '<div class="stat"><div class="stat-label">ENGINE &gt; 6000 Alerts</div>'
-            f'<div class="stat-value"{alert_style}>{alerts}</div></div>'
-            '</div>'
-        )
-
-    if gt_r.get("status") == "error":
-        gt_body = f'<div class="err-msg">{_h(gt_r.get("message",""))}</div>'
-    else:
-        total = gt_r.get("passed", 0) + gt_r.get("failed", 0)
-        gt_body = (
-            '<div class="stat-row" style="margin-bottom:16px">'
-            '<div class="stat"><div class="stat-label">Total</div>'
-            f'<div class="stat-value">{total}</div></div>'
-            '<div class="stat"><div class="stat-label">Passed</div>'
-            f'<div class="stat-value" style="color:#3fb950">{gt_r.get("passed",0)}</div></div>'
-            '<div class="stat"><div class="stat-label">Failed</div>'
-            f'<div class="stat-value" style="color:#f85149">{gt_r.get("failed",0)}</div></div>'
-            f'</div>{gtest_table_html}'
-        )
-
-    if can_r.get("status") == "error":
-        can_body = f'<div class="err-msg">{_h(can_r.get("message",""))}</div>'
-    else:
-        can_body = (
-            '<div class="stat-row" style="margin-bottom:16px">'
-            '<div class="stat"><div class="stat-label">Decoded Frames</div>'
-            f'<div class="stat-value">{can_r.get("decoded",0)}</div></div>'
-            '<div class="stat"><div class="stat-label">Unknown IDs</div>'
-            f'<div class="stat-value">{can_r.get("unknown",0)}</div></div>'
-            f'</div>{can_output_html}'
-        )
+    log_body = _log_section_body(log_r)
+    gt_body  = _gtest_section_body(gt_r)
+    can_body = _can_section_body(can_r)
 
     html = (
         '<!DOCTYPE html>\n'
