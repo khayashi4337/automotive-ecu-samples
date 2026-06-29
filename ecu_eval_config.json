@@ -1,5 +1,5 @@
 {
-  "_comment": "ecu_eval.py 設定ファイル。環境に合わせて変更してください。",
+  "_comment": "ecu_eval.py 設定ファイル。環境に合わせて変更してください。binary に .exe は不要（_build_tool_dict が自動付加）。",
 
   "msys2_bin": "C:\\msys64\\mingw64\\bin",
   "build_dir": "build",

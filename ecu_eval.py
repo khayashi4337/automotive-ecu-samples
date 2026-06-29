@@ -616,7 +616,10 @@ def _check_prerequisites(cfg: dict) -> bool:
     else:
         items.append(("WN", "ninja  not found",
                       "必須ではありませんが、推奨ビルドツールです。\n"
-                      "対処(MSYS2): pacman -S mingw-w64-x86_64-ninja"))
+                      "対処(MSYS2): pacman -S mingw-w64-x86_64-ninja\n"
+                      "ninja なしでビルドする場合(MSYS2 Make):\n"
+                      "  cmake -S . -B build -G \"MSYS Makefiles\"\n"
+                      "  cmake --build build"))
 
     # 6. サンプルファイル
     for key in ("log_parser", "can_parser"):
