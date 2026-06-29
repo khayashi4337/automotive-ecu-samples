@@ -91,9 +91,16 @@ DEFAULT_BUILD_DIR = SCRIPT_DIR / _DEFAULTS["build_dir"]
 _TOOL: dict = _build_tool_dict(_DEFAULTS["tools"])
 
 
-def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
+def _path_contains(path_str: str, entry: str) -> bool:
+    """PATH 文字列に entry が含まれるか。末尾セパレータ違いによる誤判定を防ぐ。"""
+    needle = entry.rstrip(os.sep).rstrip("/")
+    return any(e.rstrip(os.sep).rstrip("/") == needle
+               for e in path_str.split(os.pathsep) if e)
+
+
+def _run(cmd: list, env: "dict | None" = None, cwd: "Path | None" = None) -> tuple:
     run_env = os.environ.copy()
-    if MSYS2_BIN not in run_env.get("PATH", ""):
+    if not _path_contains(run_env.get("PATH", ""), MSYS2_BIN):
         run_env["PATH"] = MSYS2_BIN + os.pathsep + run_env.get("PATH", "")
     if env:
         run_env.update(env)
@@ -542,7 +549,7 @@ def _check_prerequisites(cfg: dict) -> bool:
     # cmake/ninja は MSYS2_BIN 内にある場合があるため PATH に含めて検索する
     check_env = dict(os.environ)
     msys2 = cfg.get("msys2_bin", "")
-    if sys.platform == "win32" and msys2 and msys2 not in check_env.get("PATH", ""):
+    if sys.platform == "win32" and msys2 and not _path_contains(check_env.get("PATH", ""), msys2):
         check_env["PATH"] = msys2 + os.pathsep + check_env.get("PATH", "")
 
     def _cmd_ok(cmd: list) -> bool:
