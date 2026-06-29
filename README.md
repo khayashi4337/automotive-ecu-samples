@@ -77,7 +77,7 @@ python ecu_eval.py --env SiLS
 python ecu_eval.py --env HiLS
 ```
 
-出力: `ecu_eval_report.md`
+出力: `ecu_eval_report.md` + `ecu_eval_report.html` (HTML dashboard)
 
 ---
 
@@ -160,7 +160,8 @@ SiLS Environment
   └─ 03 CAN Parser     ──→ 通信フレームの信号値確認
             │
             ▼
-      ecu_eval.py  ──→  ecu_eval_report.md  (統合評価レポート)
+      ecu_eval.py  ──→  ecu_eval_report.md    (統合評価レポート)
+                    └──→  ecu_eval_report.html  (HTML ダッシュボード)
 ```
 
 ---
