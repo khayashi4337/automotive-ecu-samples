@@ -117,7 +117,8 @@ def run_log_parser(build_dir: Path) -> dict:
     if rc != 0:
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
-    alert_pat = f'{t["alert_channel"]} > {t["alert_threshold"]}'
+    alert_pat   = f'{t["alert_channel"]} > {t["alert_threshold"]}'
+    alert_label = f'{t["alert_channel"]} > {t["alert_threshold"]} Alerts'
     total = alerts = 0
     for line in out.splitlines():
         if "Total entries" in line:
@@ -131,7 +132,8 @@ def run_log_parser(build_dir: Path) -> dict:
             except ValueError:
                 pass
 
-    return {"status": "ok", "total_entries": total, "alerts": alerts, "raw": out}
+    return {"status": "ok", "total_entries": total, "alerts": alerts,
+            "alert_label": alert_label, "raw": out}
 
 
 def run_gtest(build_dir: Path, env_tag: str) -> dict:
@@ -219,33 +221,33 @@ def generate_report(results: dict, env_tag: str, output: Path):
     ]
 
     lines += ["## 1. ECU Log Parser", ""]
-    if log_r["status"] == "error":
-        lines += [f"> {log_r['message']}", ""]
+    if log_r.get("status") == "error":
+        lines += [f"> {log_r.get('message', '')}", ""]
     else:
         lines += [
-            f"- Total log entries    : **{log_r['total_entries']}**",
-            f"- ENGINE > 6000 alerts : **{log_r['alerts']}**",
+            f"- Total log entries    : **{log_r.get('total_entries', 0)}**",
+            f"- ENGINE > 6000 alerts : **{log_r.get('alerts', 0)}**",
             "",
         ]
 
     lines += ["## 2. GTest Reporter", ""]
-    if gt_r["status"] == "error":
-        lines += [f"> {gt_r['message']}", ""]
+    if gt_r.get("status") == "error":
+        lines += [f"> {gt_r.get('message', '')}", ""]
     else:
-        total = gt_r["passed"] + gt_r["failed"]
-        lines += [f"- Result : **{gt_r['passed']}/{total} PASSED**", ""]
-        lines += _extract_md_section(gt_r["report_md"], "Test Details")
+        total = gt_r.get("passed", 0) + gt_r.get("failed", 0)
+        lines += [f"- Result : **{gt_r.get('passed', 0)}/{total} PASSED**", ""]
+        lines += _extract_md_section(gt_r.get("report_md", ""), "Test Details")
         lines.append("")
 
     lines += ["## 3. CAN Parser", ""]
-    if can_r["status"] == "error":
-        lines += [f"> {can_r['message']}", ""]
+    if can_r.get("status") == "error":
+        lines += [f"> {can_r.get('message', '')}", ""]
     else:
         lines += [
-            f"- Decoded frames : **{can_r['decoded']}**",
-            f"- Unknown frames : **{can_r['unknown']}**",
+            f"- Decoded frames : **{can_r.get('decoded', 0)}**",
+            f"- Unknown frames : **{can_r.get('unknown', 0)}**",
             "",
-            "```", can_r["raw"].strip(), "```", "",
+            "```", can_r.get("raw", "").strip(), "```", "",
         ]
 
     output.write_text("\n".join(lines), encoding="utf-8")
@@ -421,11 +423,12 @@ def _log_section_body(log_r: dict) -> str:
         return f'<div class="err-msg">{_h(log_r.get("message",""))}</div>'
     alerts = log_r.get("alerts", 0)
     alert_class = ' class="stat-value alert"' if alerts > 0 else ' class="stat-value"'
+    alert_label = _h(log_r.get("alert_label", "Alerts"))
     return (
         '<div class="stat-row">'
         '<div class="stat"><div class="stat-label">Total Entries</div>'
         f'<div class="stat-value">{log_r.get("total_entries",0)}</div></div>'
-        '<div class="stat"><div class="stat-label">ENGINE &gt; 6000 Alerts</div>'
+        f'<div class="stat"><div class="stat-label">{alert_label}</div>'
         f'<div{alert_class}>{alerts}</div></div>'
         '</div>'
     )
