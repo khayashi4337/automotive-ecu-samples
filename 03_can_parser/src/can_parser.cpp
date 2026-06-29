@@ -28,6 +28,9 @@ bool CanParser::parse_hex(const std::string& id_hex,
 }
 
 uint64_t CanParser::extract_raw(const CanFrame& frame, const SignalDef& sig) {
+    // decode() が事前に境界チェックしているが、直接呼び出し時のクラッシュを防ぐ
+    if (sig.start_byte + sig.length_bytes > frame.dlc) return 0;
+
     uint64_t raw = 0;
     if (sig.big_endian) {
         for (uint8_t i = 0; i < sig.length_bytes; ++i) {

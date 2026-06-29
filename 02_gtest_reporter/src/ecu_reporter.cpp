@@ -35,16 +35,20 @@ void EcuMarkdownReporter::OnTestProgramEnd(const testing::UnitTest& unit_test) {
 }
 
 std::string EcuMarkdownReporter::extract_req_id(const std::string& test_name) {
-    // テスト名の [REQ-XXX] を抽出する。例: "CheckRPM_REQ001" → "REQ-001"
+    // テスト名から REQ\d+ パターンを抽出する。例: "CheckRPM_REQ001" → "REQ001"
+    static const std::regex kReqPattern(R"((REQ\d+))");
     std::smatch m;
-    if (std::regex_search(test_name, m, std::regex(R"((REQ\d+))")))
+    if (std::regex_search(test_name, m, kReqPattern))
         return m[1].str();
     return "-";
 }
 
 void EcuMarkdownReporter::write_report(const testing::UnitTest& unit_test) const {
     std::ofstream f(output_path_);
-    if (!f.is_open()) return;
+    if (!f.is_open()) {
+        std::cerr << "[EcuMarkdownReporter] Cannot open report file: " << output_path_ << "\n";
+        return;
+    }
 
     int total   = unit_test.total_test_count();
     int passed  = unit_test.successful_test_count();

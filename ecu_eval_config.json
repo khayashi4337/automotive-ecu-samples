@@ -1,0 +1,26 @@
+{
+  "_comment": "ecu_eval.py 設定ファイル。環境に合わせて変更してください。binary に .exe は不要（_build_tool_dict が自動付加）。",
+
+  "msys2_bin": "C:\\msys64\\mingw64\\bin",
+  "build_dir": "build",
+
+  "tools": {
+    "log_parser": {
+      "subdir": "01_log_parser",
+      "binary": "log_parser_bin",
+      "sample": "01_log_parser/sample.log",
+      "alert_channel": "ENGINE",
+      "alert_threshold": 6000
+    },
+    "gtest": {
+      "subdir": "02_gtest_reporter",
+      "binary": "sample_ecu_test",
+      "report": "02_gtest_reporter/ecu_test_report.md"
+    },
+    "can_parser": {
+      "subdir": "03_can_parser",
+      "binary": "can_parser_bin",
+      "sample": "03_can_parser/sample.can"
+    }
+  }
+}

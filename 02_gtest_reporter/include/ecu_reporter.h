@@ -7,7 +7,7 @@
 struct TestResult {
     std::string suite_name;
     std::string test_name;
-    std::string requirement_id;  // テスト名の [REQ-XXX] から抽出
+    std::string requirement_id;  // テスト名の REQ\d+ パターン ("REQ001") から抽出
     bool passed;
     double elapsed_ms;
     std::string failure_message;
