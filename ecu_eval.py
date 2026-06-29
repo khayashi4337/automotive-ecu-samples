@@ -29,17 +29,17 @@ _TOOL = {
     "log_parser": {
         "subdir": "01_log_parser",
         "binary": f"log_parser_bin{EXE}",
-        "sample": Path("01_log_parser") / "sample.log",
+        "sample": "01_log_parser/sample.log",
     },
     "gtest": {
         "subdir": "02_gtest_reporter",
         "binary": f"sample_ecu_test{EXE}",
-        "report":  Path("02_gtest_reporter") / "ecu_test_report.md",
+        "report": "02_gtest_reporter/ecu_test_report.md",
     },
     "can_parser": {
         "subdir": "03_can_parser",
         "binary": f"can_parser_bin{EXE}",
-        "sample": Path("03_can_parser") / "sample.can",
+        "sample": "03_can_parser/sample.can",
     },
 }
 
@@ -186,14 +186,7 @@ def generate_report(results: dict, env_tag: str, output: Path):
     else:
         total = gt_r["passed"] + gt_r["failed"]
         lines += [f"- Result : **{gt_r['passed']}/{total} PASSED**", ""]
-        in_section = False
-        for line in gt_r["report_md"].splitlines():
-            if line.startswith("## Test Details"):
-                in_section = True
-            elif line.startswith("## ") and in_section:
-                break
-            if in_section:
-                lines.append(line)
+        lines += _extract_md_section(gt_r["report_md"], "Test Details")
         lines.append("")
 
     lines += ["## 3. CAN Parser", ""]
@@ -302,19 +295,27 @@ _DASHBOARD_CSS = """
 """
 
 
-def _parse_md_table(md_text: str, section_header: str) -> list:
+def _extract_md_section(md_text: str, section_header: str) -> list:
+    """## section_header から次の ## までの行リストを返す（ヘッダ行自体は含まない）"""
     lines = md_text.splitlines()
     in_section = False
-    headers = []
-    rows = []
-
+    result = []
     for line in lines:
         if line.startswith(f"## {section_header}"):
             in_section = True
             continue
         if in_section and line.startswith("## "):
             break
-        if not in_section or not line.startswith("|"):
+        if in_section:
+            result.append(line)
+    return result
+
+
+def _parse_md_table(md_text: str, section_header: str) -> list:
+    headers: list = []
+    rows: list = []
+    for line in _extract_md_section(md_text, section_header):
+        if not line.startswith("|"):
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if all(re.fullmatch(r"-+", c) for c in cells if c):
@@ -323,7 +324,6 @@ def _parse_md_table(md_text: str, section_header: str) -> list:
             headers = cells
         else:
             rows.append(dict(zip(headers, cells)))
-
     return rows
 
 
