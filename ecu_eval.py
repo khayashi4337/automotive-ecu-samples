@@ -224,9 +224,10 @@ def generate_report(results: dict, env_tag: str, output: Path):
     if log_r.get("status") == "error":
         lines += [f"> {log_r.get('message', '')}", ""]
     else:
+        alert_label = log_r.get("alert_label", "Alerts")
         lines += [
-            f"- Total log entries    : **{log_r.get('total_entries', 0)}**",
-            f"- ENGINE > 6000 alerts : **{log_r.get('alerts', 0)}**",
+            f"- Total log entries : **{log_r.get('total_entries', 0)}**",
+            f"- {alert_label}     : **{log_r.get('alerts', 0)}**",
             "",
         ]
 
@@ -563,28 +564,35 @@ def _check_prerequisites(cfg: dict) -> bool:
         all_ok = False
 
     # 2. MSYS2_BIN ディレクトリ（Windows のみ）
+    msys2_bin_ok = True
     if sys.platform == "win32":
-        msys2 = Path(cfg["msys2_bin"])
-        if msys2.is_dir():
-            items.append(("OK", f"MSYS2_BIN  {msys2}", ""))
+        msys2_path = Path(cfg["msys2_bin"])
+        if msys2_path.is_dir():
+            items.append(("OK", f"MSYS2_BIN  {msys2_path}", ""))
         else:
-            items.append(("NG", f"MSYS2_BIN  {msys2}",
+            items.append(("NG", f"MSYS2_BIN  {msys2_path}",
                           "ディレクトリが見つかりません。\n"
                           "対処: MSYS2 (https://www.msys2.org/) をインストールし、\n"
                           "      ecu_eval_config.json の msys2_bin を実際のパスに変更してください。"))
             all_ok = False
+            msys2_bin_ok = False
 
     # 3. g++ コンパイラ
     if sys.platform == "win32":
-        gpp = Path(cfg["msys2_bin"]) / "g++.exe"
-        if gpp.exists():
-            items.append(("OK", f"g++        {gpp}", ""))
-        else:
-            items.append(("NG", f"g++        {gpp}",
-                          "MinGW-w64 ツールチェーンが見つかりません。\n"
-                          "対処: MSYS2 ターミナルで以下を実行してください:\n"
-                          "      pacman -S mingw-w64-x86_64-gcc"))
+        if not msys2_bin_ok:
+            # MSYS2_BIN が存在しない場合、g++ の確認は意味がないのでスキップ
+            items.append(("NG", "g++        (MSYS2_BIN 未確立のためスキップ)", ""))
             all_ok = False
+        else:
+            gpp = msys2_path / "g++.exe"
+            if gpp.exists():
+                items.append(("OK", f"g++        {gpp}", ""))
+            else:
+                items.append(("NG", f"g++        {gpp}",
+                              "MinGW-w64 ツールチェーンが見つかりません。\n"
+                              "対処: MSYS2 ターミナルで以下を実行してください:\n"
+                              "      pacman -S mingw-w64-x86_64-gcc"))
+                all_ok = False
     else:
         if _cmd_ok(["g++", "--version"]):
             items.append(("OK", "g++", ""))
