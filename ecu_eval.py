@@ -49,26 +49,25 @@ _DEFAULTS: dict = {
 
 
 def _load_config(path: Path) -> dict:
-    """設定ファイルを読み込む。ファイルが存在しない場合はデフォルト値を返す。"""
+    """設定ファイルを読み込む。ファイルが存在しない場合はデフォルト値を返す。
+    tools 以外のトップレベル値は上書き、tools は各ツール内フィールドを個別マージする。
+    設定ファイルのフィールドを部分指定しても他フィールドが消えない。
+    """
     cfg = copy.deepcopy(_DEFAULTS)
     if not path.exists():
         return cfg
     with open(path, encoding="utf-8") as f:
         overrides = json.load(f)
     for key, val in overrides.items():
-        if key.startswith("_"):
-            continue
-        if isinstance(val, dict) and key in cfg and isinstance(cfg[key], dict):
-            cfg[key].update(val)
+        if key.startswith("_") or key == "tools":
+            continue  # tools は後段で個別マージ
+        cfg[key] = val
+    # tools: デフォルト値を保持しつつ、指定フィールドだけ上書き
+    for tool, tval in overrides.get("tools", {}).items():
+        if tool in cfg["tools"]:
+            cfg["tools"][tool].update(tval)
         else:
-            cfg[key] = val
-    # tools はネストが2段階なので個別にマージ
-    if "tools" in overrides:
-        for tool, tval in overrides["tools"].items():
-            if tool in cfg["tools"]:
-                cfg["tools"][tool].update(tval)
-            else:
-                cfg["tools"][tool] = tval
+            cfg["tools"][tool] = tval
     return cfg
 
 
@@ -536,9 +535,15 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
 def _check_prerequisites(cfg: dict) -> bool:
     """前提条件を検査する。問題があれば修正方法を表示し、Falseを返す。"""
 
+    # cmake/ninja は MSYS2_BIN 内にある場合があるため PATH に含めて検索する
+    check_env = dict(os.environ)
+    msys2 = cfg.get("msys2_bin", "")
+    if sys.platform == "win32" and msys2 and msys2 not in check_env.get("PATH", ""):
+        check_env["PATH"] = msys2 + os.pathsep + check_env.get("PATH", "")
+
     def _cmd_ok(cmd: list) -> bool:
         try:
-            return subprocess.run(cmd, capture_output=True).returncode == 0
+            return subprocess.run(cmd, capture_output=True, env=check_env).returncode == 0
         except FileNotFoundError:
             return False
 

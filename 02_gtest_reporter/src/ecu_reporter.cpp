@@ -44,7 +44,10 @@ std::string EcuMarkdownReporter::extract_req_id(const std::string& test_name) {
 
 void EcuMarkdownReporter::write_report(const testing::UnitTest& unit_test) const {
     std::ofstream f(output_path_);
-    if (!f.is_open()) return;
+    if (!f.is_open()) {
+        std::cerr << "[EcuMarkdownReporter] Cannot open report file: " << output_path_ << "\n";
+        return;
+    }
 
     int total   = unit_test.total_test_count();
     int passed  = unit_test.successful_test_count();
