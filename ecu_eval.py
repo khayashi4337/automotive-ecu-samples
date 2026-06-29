@@ -2,6 +2,8 @@
 """ECU Evaluation Suite — 全ツールを一括実行して統合レポートを生成する"""
 
 import argparse
+import copy
+import json
 import os
 import re
 import subprocess
@@ -14,34 +16,80 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 SCRIPT_DIR = Path(__file__).parent
-DEFAULT_BUILD_DIR = SCRIPT_DIR / "build"
+DEFAULT_CONFIG = SCRIPT_DIR / "ecu_eval_config.json"
+EXE = ".exe" if sys.platform == "win32" else ""
+
+# ──────────────────────────────────────────────
+# 設定ファイル読み込み
+# ──────────────────────────────────────────────
+
+_DEFAULTS: dict = {
+    "msys2_bin": r"C:\msys64\mingw64\bin",
+    "build_dir": "build",
+    "tools": {
+        "log_parser": {
+            "subdir": "01_log_parser",
+            "binary": "log_parser_bin",
+            "sample": "01_log_parser/sample.log",
+            "alert_channel": "ENGINE",
+            "alert_threshold": 6000,
+        },
+        "gtest": {
+            "subdir": "02_gtest_reporter",
+            "binary": "sample_ecu_test",
+            "report": "02_gtest_reporter/ecu_test_report.md",
+        },
+        "can_parser": {
+            "subdir": "03_can_parser",
+            "binary": "can_parser_bin",
+            "sample": "03_can_parser/sample.can",
+        },
+    },
+}
+
+
+def _load_config(path: Path) -> dict:
+    """設定ファイルを読み込む。ファイルが存在しない場合はデフォルト値を返す。"""
+    cfg = copy.deepcopy(_DEFAULTS)
+    if not path.exists():
+        return cfg
+    with open(path, encoding="utf-8") as f:
+        overrides = json.load(f)
+    for key, val in overrides.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(val, dict) and key in cfg and isinstance(cfg[key], dict):
+            cfg[key].update(val)
+        else:
+            cfg[key] = val
+    # tools はネストが2段階なので個別にマージ
+    if "tools" in overrides:
+        for tool, tval in overrides["tools"].items():
+            if tool in cfg["tools"]:
+                cfg["tools"][tool].update(tval)
+            else:
+                cfg["tools"][tool] = tval
+    return cfg
+
+
+def _build_tool_dict(tools_cfg: dict) -> dict:
+    """設定の tools セクションから実行時 _TOOL dict を組み立てる（.exe 付加）。"""
+    result = {}
+    for name, t in tools_cfg.items():
+        entry = dict(t)
+        entry["binary"] = t["binary"] + EXE
+        result[name] = entry
+    return result
 
 
 # ──────────────────────────────────────────────
 # 各ツールの実行
 # ──────────────────────────────────────────────
 
-MSYS2_BIN = r"C:\msys64\mingw64\bin"
-EXE = ".exe" if sys.platform == "win32" else ""
-
-# バイナリ／サンプルファイルのパス定義（1か所で変更できるようにまとめる）
-_TOOL = {
-    "log_parser": {
-        "subdir": "01_log_parser",
-        "binary": f"log_parser_bin{EXE}",
-        "sample": "01_log_parser/sample.log",
-    },
-    "gtest": {
-        "subdir": "02_gtest_reporter",
-        "binary": f"sample_ecu_test{EXE}",
-        "report": "02_gtest_reporter/ecu_test_report.md",
-    },
-    "can_parser": {
-        "subdir": "03_can_parser",
-        "binary": f"can_parser_bin{EXE}",
-        "sample": "03_can_parser/sample.can",
-    },
-}
+# 起動時はデフォルト値で初期化。main() でコンフィグ読み込み後に上書きされる。
+MSYS2_BIN: str = _DEFAULTS["msys2_bin"]
+DEFAULT_BUILD_DIR = SCRIPT_DIR / _DEFAULTS["build_dir"]
+_TOOL: dict = _build_tool_dict(_DEFAULTS["tools"])
 
 
 def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
@@ -70,6 +118,7 @@ def run_log_parser(build_dir: Path) -> dict:
     if rc != 0:
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
+    alert_pat = f'{t["alert_channel"]} > {t["alert_threshold"]}'
     total = alerts = 0
     for line in out.splitlines():
         if "Total entries" in line:
@@ -77,7 +126,7 @@ def run_log_parser(build_dir: Path) -> dict:
                 total = int(line.split(":")[-1].strip())
             except ValueError:
                 pass
-        if "ENGINE > 6000" in line:
+        if alert_pat in line:
             try:
                 alerts = int(line.split(":")[-1].strip())
             except ValueError:
@@ -485,6 +534,8 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
 # ──────────────────────────────────────────────
 
 def main():
+    global MSYS2_BIN, DEFAULT_BUILD_DIR, _TOOL
+
     parser = argparse.ArgumentParser(
         description="ECU Evaluation Suite — 全ツールを一括実行して統合レポートを生成"
     )
@@ -492,10 +543,17 @@ def main():
                         choices=["SiLS", "HiLS"],
                         help="評価環境 (default: SiLS)")
     parser.add_argument("--build-dir", default=None,
-                        help="ビルドディレクトリ (default: ./build)")
+                        help="ビルドディレクトリ (default: ./build or config value)")
     parser.add_argument("--output", default="ecu_eval_report.md",
                         help="出力レポートファイル名 (default: ecu_eval_report.md); also generates .html dashboard with the same stem")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG),
+                        help=f"設定ファイルパス (default: {DEFAULT_CONFIG.name})")
     args = parser.parse_args()
+
+    cfg = _load_config(Path(args.config))
+    MSYS2_BIN        = cfg["msys2_bin"]
+    DEFAULT_BUILD_DIR = SCRIPT_DIR / cfg["build_dir"]
+    _TOOL            = _build_tool_dict(cfg["tools"])
 
     build_dir   = Path(args.build_dir) if args.build_dir else DEFAULT_BUILD_DIR
     output_md   = SCRIPT_DIR / args.output
