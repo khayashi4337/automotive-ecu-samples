@@ -530,6 +530,119 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
 
 
 # ──────────────────────────────────────────────
+# 前提条件チェック
+# ──────────────────────────────────────────────
+
+def _check_prerequisites(cfg: dict) -> bool:
+    """前提条件を検査する。問題があれば修正方法を表示し、Falseを返す。"""
+
+    def _cmd_ok(cmd: list) -> bool:
+        try:
+            return subprocess.run(cmd, capture_output=True).returncode == 0
+        except FileNotFoundError:
+            return False
+
+    items: list = []  # (icon, label, advice)
+    all_ok = True
+
+    # 1. Python バージョン
+    major, minor = sys.version_info.major, sys.version_info.minor
+    if (major, minor) >= (3, 8):
+        items.append(("OK", f"Python {major}.{minor}", ""))
+    else:
+        items.append(("NG", f"Python {major}.{minor}",
+                      "Python 3.8 以上が必要です。https://www.python.org/ からインストールしてください。"))
+        all_ok = False
+
+    # 2. MSYS2_BIN ディレクトリ（Windows のみ）
+    if sys.platform == "win32":
+        msys2 = Path(cfg["msys2_bin"])
+        if msys2.is_dir():
+            items.append(("OK", f"MSYS2_BIN  {msys2}", ""))
+        else:
+            items.append(("NG", f"MSYS2_BIN  {msys2}",
+                          "ディレクトリが見つかりません。\n"
+                          "対処: MSYS2 (https://www.msys2.org/) をインストールし、\n"
+                          "      ecu_eval_config.json の msys2_bin を実際のパスに変更してください。"))
+            all_ok = False
+
+    # 3. g++ コンパイラ
+    if sys.platform == "win32":
+        gpp = Path(cfg["msys2_bin"]) / "g++.exe"
+        if gpp.exists():
+            items.append(("OK", f"g++        {gpp}", ""))
+        else:
+            items.append(("NG", f"g++        {gpp}",
+                          "MinGW-w64 ツールチェーンが見つかりません。\n"
+                          "対処: MSYS2 ターミナルで以下を実行してください:\n"
+                          "      pacman -S mingw-w64-x86_64-gcc"))
+            all_ok = False
+    else:
+        if _cmd_ok(["g++", "--version"]):
+            items.append(("OK", "g++", ""))
+        else:
+            items.append(("NG", "g++  not found",
+                          "対処: sudo apt install g++  (または brew install gcc)"))
+            all_ok = False
+
+    # 4. CMake
+    if _cmd_ok(["cmake", "--version"]):
+        items.append(("OK", "cmake", ""))
+    else:
+        items.append(("NG", "cmake  not found",
+                      "対処(MSYS2): pacman -S mingw-w64-x86_64-cmake\n"
+                      "対処(直接):  https://cmake.org/download/ からインストールしてください。"))
+        all_ok = False
+
+    # 5. Ninja（推奨・必須ではない）
+    if _cmd_ok(["ninja", "--version"]):
+        items.append(("OK", "ninja", ""))
+    else:
+        items.append(("WN", "ninja  not found",
+                      "必須ではありませんが、推奨ビルドツールです。\n"
+                      "対処(MSYS2): pacman -S mingw-w64-x86_64-ninja"))
+
+    # 6. サンプルファイル
+    for key in ("log_parser", "can_parser"):
+        sample = SCRIPT_DIR / cfg["tools"][key]["sample"]
+        if sample.exists():
+            items.append(("OK", f"sample     {sample.name}", ""))
+        else:
+            items.append(("NG", f"sample     {sample}",
+                          "サンプルファイルが見つかりません。\n"
+                          "対処: リポジトリが完全にクローンされているか確認してください。"))
+            all_ok = False
+
+    # 7. ビルドディレクトリ
+    build_dir = SCRIPT_DIR / cfg["build_dir"]
+    if build_dir.is_dir():
+        items.append(("OK", f"build dir  {build_dir}", ""))
+    else:
+        items.append(("WN", f"build dir  {build_dir}  (未作成)",
+                      "初回ビルドが必要です。以下を実行してください:\n"
+                      "  cmake -S . -B build -G Ninja\n"
+                      "  cmake --build build"))
+
+    # ── 結果表示 ──
+    icon_map = {"OK": "✅", "NG": "❌", "WN": "⚠️ "}
+    print("=== 前提条件チェック ===")
+    for status, label, advice in items:
+        print(f"  {icon_map[status]} {label}")
+        if advice:
+            for line in advice.splitlines():
+                print(f"        {line}")
+    print()
+
+    if not all_ok:
+        print("❌  前提条件を満たしていない項目があります。")
+        print("    上記の「対処」を参考に環境を整えてから再実行してください。")
+        print("    設定値に誤りがある場合は ecu_eval_config.json を見直してください。")
+        print()
+
+    return all_ok
+
+
+# ──────────────────────────────────────────────
 # エントリーポイント
 # ──────────────────────────────────────────────
 
@@ -548,12 +661,18 @@ def main():
                         help="出力レポートファイル名 (default: ecu_eval_report.md); also generates .html dashboard with the same stem")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG),
                         help=f"設定ファイルパス (default: {DEFAULT_CONFIG.name})")
+    parser.add_argument("--no-check", action="store_true",
+                        help="前提条件チェックをスキップする")
     args = parser.parse_args()
 
     cfg = _load_config(Path(args.config))
     MSYS2_BIN        = cfg["msys2_bin"]
     DEFAULT_BUILD_DIR = SCRIPT_DIR / cfg["build_dir"]
     _TOOL            = _build_tool_dict(cfg["tools"])
+
+    if not args.no_check:
+        if not _check_prerequisites(cfg):
+            sys.exit(1)
 
     build_dir   = Path(args.build_dir) if args.build_dir else DEFAULT_BUILD_DIR
     output_md   = SCRIPT_DIR / args.output
