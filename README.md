@@ -11,9 +11,9 @@ SiLS（Software in the Loop Simulation）環境での動作を前提に設計し
 
 | # | Tool | Description |
 |---|---|---|
-| 01 | [log_parser](01_log_parser/) | ECUログをパースして閾値超過を検出・レポート化 |
-| 02 | [gtest_reporter](02_gtest_reporter/) | GTestのイベントを直接受け取り、要件IDつきMarkdownレポートを生成 |
-| 03 | [can_parser](03_can_parser/) | CANフレームをバイナリからデコードして信号値に変換 |
+| 01 | [log_parser](01_log_parser/README.md) | ECUログをパースして閾値超過を検出・レポート化 |
+| 02 | [gtest_reporter](02_gtest_reporter/README.md) | GTestのイベントを直接受け取り、要件IDつきMarkdownレポートを生成 |
+| 03 | [can_parser](03_can_parser/README.md) | CANフレームをバイナリからデコードして信号値に変換 |
 | — | [ecu_eval.py](ecu_eval.py) | 全ツールを一括実行して統合レポートを生成するPythonスクリプト |
 
 ---
@@ -36,7 +36,7 @@ SiLS（Software in the Loop Simulation）環境での動作を前提に設計し
 
 - [MSYS2](https://www.msys2.org/) with MinGW-w64 toolchain
 - CMake ≥ 3.20
-- Python ≥ 3.10
+- Python ≥ 3.8
 
 ### Install dependencies (MSYS2)
 
@@ -75,9 +75,45 @@ python ecu_eval.py --env SiLS
 
 # HiLS環境
 python ecu_eval.py --env HiLS
+
+# 前提条件チェックをスキップ（CI環境など）
+python ecu_eval.py --env SiLS --no-check
+
+# 設定ファイルを指定（デフォルト: ecu_eval_config.json）
+python ecu_eval.py --config path/to/custom_config.json
 ```
 
 出力: `ecu_eval_report.md` + `ecu_eval_report.html` (HTML dashboard)
+
+**オプション一覧:**
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `--env` | `SiLS` | 評価環境 (`SiLS` / `HiLS`) |
+| `--build-dir` | `./build` | ビルドディレクトリのパス |
+| `--output` | `ecu_eval_report.md` | 出力レポートファイル名 |
+| `--config` | `ecu_eval_config.json` | 設定ファイルのパス |
+| `--no-check` | — | 起動時の前提条件チェックをスキップ |
+
+### Configuration
+
+`ecu_eval_config.json` で環境依存値をカスタマイズできます。
+
+```json
+{
+  "msys2_bin": "C:\\msys64\\mingw64\\bin",
+  "build_dir": "build",
+  "tools": {
+    "log_parser": {
+      "alert_channel": "ENGINE",
+      "alert_threshold": 6000
+    }
+  }
+}
+```
+
+> **注意:** `binary` フィールドに `.exe` は不要です（Windows では自動付加）。
+> 設定を部分的に記述した場合、残りのフィールドはデフォルト値が保持されます。
 
 ---
 
@@ -185,6 +221,7 @@ automotive-ecu-samples/
 │   ├── test/
 │   └── sample.can
 ├── ecu_eval.py
+├── ecu_eval_config.json
 └── CMakeLists.txt
 ```
 
