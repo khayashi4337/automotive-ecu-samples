@@ -3,7 +3,7 @@
 | Item | Value |
 |---|---|
 | Environment | SiLS |
-| Date        | 2026-06-29 16:47:43 |
+| Date        | 2026-06-29 17:02:48 |
 
 ## Overall Status
 
@@ -27,7 +27,7 @@
 | Suite | Test | Requirement | Result | Time (ms) |
 |---|---|---|---|---|
 | EngineTest | NormalRPM_REQ001 | REQ001 | ✅ PASS | 0.01 |
-| EngineTest | OverRPM_REQ002 | REQ002 | ❌ FAIL | 0.30 |
+| EngineTest | OverRPM_REQ002 | REQ002 | ❌ FAIL | 0.25 |
 | BrakeTest | NormalPressure_REQ010 | REQ010 | ✅ PASS | 0.00 |
 | BrakeTest | EmergencyBrake_REQ011 | REQ011 | ✅ PASS | 0.00 |
 | ThermalTest | CoolantTemp_REQ020 | REQ020 | ✅ PASS | 0.00 |

@@ -22,7 +22,7 @@ DEFAULT_BUILD_DIR = SCRIPT_DIR / "build"
 # ──────────────────────────────────────────────
 
 MSYS2_BIN = r"C:\msys64\mingw64\bin"
-EXE = ".exe" if __import__("sys").platform == "win32" else ""
+EXE = ".exe" if sys.platform == "win32" else ""
 
 
 def _run(cmd: list, env: dict = None, cwd: Path = None) -> tuple:
@@ -46,7 +46,9 @@ def run_log_parser(build_dir: Path) -> dict:
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
 
-    rc, out, _ = _run([str(binary), str(sample)])
+    rc, out, err = _run([str(binary), str(sample)])
+    if rc != 0:
+        return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
     total = alerts = 0
     for line in out.splitlines():
@@ -70,8 +72,11 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
 
-    rc, out, _ = _run([str(binary)], env={"ECU_TEST_ENV": env_tag},
-                       cwd=build_dir / "02_gtest_reporter")
+    rc, out, err = _run([str(binary)], env={"ECU_TEST_ENV": env_tag},
+                        cwd=build_dir / "02_gtest_reporter")
+    if rc not in (0, 1):
+        return {"status": "error", "message": err.strip() or f"exited with rc={rc}",
+                "passed": 0, "failed": 0, "report_md": "", "raw": out}
 
     passed = failed = 0
     for line in out.splitlines():
@@ -88,7 +93,7 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
         report_md = report_file.read_text(encoding="utf-8")
 
     return {
-        "status": "ok" if rc == 0 else "failed",
+        "status": "ok" if rc in (0, 1) else "error",  # rc=1 = test failures (normal GTest exit)
         "passed": passed, "failed": failed,
         "report_md": report_md, "raw": out,
     }
@@ -101,7 +106,9 @@ def run_can_parser(build_dir: Path) -> dict:
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
 
-    rc, out, _ = _run([str(binary), str(sample)])
+    rc, out, err = _run([str(binary), str(sample)])
+    if rc != 0:
+        return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
     decoded = sum(1 for l in out.splitlines() if l.startswith("Frame"))
     unknown = sum(1 for l in out.splitlines() if "unknown ID" in l)
@@ -217,7 +224,7 @@ def _parse_md_table(md_text: str, section_header: str) -> list:
 
 
 def _html_badge(status: str, failed: int = 0) -> str:
-    if status == "error":
+    if status in ("error", "failed"):
         return '<span class="badge badge-error">ERROR</span>'
     if failed > 0:
         return f'<span class="badge badge-warn">{failed} FAILED</span>'
@@ -240,6 +247,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
 
     all_ok = (
         log_r.get("status") == "ok" and
+        log_r.get("alerts", 0) == 0 and
         gt_r.get("failed", 0) == 0 and
         can_r.get("status") == "ok"
     )
@@ -251,7 +259,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         rows_html = ""
         for row in gtest_rows:
             result = row.get("Result", "")
-            is_pass = "PASS" in result
+            is_pass = result.strip().endswith("PASS")
             row_class = "tr-pass" if is_pass else "tr-fail"
             rows_html += (
                 f'<tr class="{row_class}">'
@@ -274,11 +282,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
 
     can_output_html = ""
     if can_r.get("raw"):
-        escaped = (can_r["raw"]
-                   .replace("&", "&amp;")
-                   .replace("<", "&lt;")
-                   .replace(">", "&gt;"))
-        can_output_html = f'<pre class="code-block">{escaped}</pre>'
+        can_output_html = f'<pre class="code-block">{_h(can_r["raw"])}</pre>'
 
     if log_r.get("status") == "error":
         log_body = f'<div class="err-msg">{_h(log_r.get("message",""))}</div>'
@@ -409,7 +413,7 @@ def generate_html_report(results: dict, env_tag: str, output: Path):
         '<body>\n'
         '<div class="header">\n'
         '  <h1>ECU Evaluation Dashboard</h1>\n'
-        f'  <div class="meta">Environment: <strong>{env_tag}</strong> &nbsp;|&nbsp; {now}</div>\n'
+        f'  <div class="meta">Environment: <strong>{_h(env_tag)}</strong> &nbsp;|&nbsp; {now}</div>\n'
         '</div>\n'
         f'<div class="overall-bar {overall_class}">{overall_text}</div>\n'
         '<div class="container">\n\n'

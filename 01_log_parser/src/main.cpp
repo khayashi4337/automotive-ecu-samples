@@ -7,16 +7,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    auto entries = LogParser::parse_file(argv[1]);
-    auto alerts  = LogParser::filter_by_threshold(entries, "ENGINE", 6000.0);
+    try {
+        auto entries = LogParser::parse_file(argv[1]);
+        auto alerts  = LogParser::filter_by_threshold(entries, "ENGINE", 6000.0);
 
-    std::cout << "=== ECU Log Parser ===\n";
-    std::cout << "Total entries : " << entries.size() << "\n";
-    std::cout << "ENGINE > 6000 : " << alerts.size() << "\n\n";
+        std::cout << "=== ECU Log Parser ===\n";
+        std::cout << "Total entries : " << entries.size() << "\n";
+        std::cout << "ENGINE > 6000 : " << alerts.size() << "\n\n";
 
-    for (const auto& e : alerts) {
-        std::cout << "[" << e.timestamp << "] " << e.level
-                  << " " << e.channel << " " << e.message << "\n";
+        for (const auto& e : alerts) {
+            std::cout << "[" << e.timestamp << "] " << e.level
+                      << " " << e.channel << " " << e.message << "\n";
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+        return 1;
     }
     return 0;
 }
