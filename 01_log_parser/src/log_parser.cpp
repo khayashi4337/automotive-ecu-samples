@@ -15,6 +15,9 @@ bool LogParser::parse_line(const std::string& line, LogEntry& entry) {
     std::getline(ss, entry.message);
     if (!entry.message.empty() && entry.message[0] == ' ')
         entry.message = entry.message.substr(1);
+    // CRLF ファイルを読んだとき行末に \r が残る場合がある
+    if (!entry.message.empty() && entry.message.back() == '\r')
+        entry.message.pop_back();
 
     // "key=value" 形式の数値を抽出
     auto eq = entry.message.find('=');
