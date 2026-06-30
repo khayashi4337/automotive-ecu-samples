@@ -3,12 +3,12 @@
 #include <vector>
 
 struct LogEntry {
-    double timestamp;
+    double timestamp = 0.0;
     std::string level;    // INFO / WARN / ERROR
     std::string channel;  // ECU channel name (e.g. "ENGINE", "BRAKE")
     std::string message;
-    double value;
-    bool has_value;
+    double value    = 0.0;
+    bool has_value  = false;
 };
 
 class LogParser {
