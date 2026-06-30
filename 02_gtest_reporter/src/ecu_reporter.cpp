@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <regex>
 #include <sstream>
+#include <string>
 
 EcuMarkdownReporter::EcuMarkdownReporter(const std::string& output_path,
                                          const std::string& env_tag)
@@ -79,28 +80,27 @@ void EcuMarkdownReporter::write_report(const testing::UnitTest& unit_test) const
           << " | " << s->failed_test_count() << " |\n";
     }
 
-    // テスト詳細（要件IDつき）
+    // テスト詳細と失敗バッファを1回のループで同時に構築
     f << "\n## Test Details\n\n";
     f << "| Suite | Test | Requirement | Result | Time (ms) |\n"
          "|---|---|---|---|---|\n";
+    std::ostringstream failure_buf;
     for (const auto& r : results_) {
         f << "| " << r.suite_name
           << " | " << r.test_name
           << " | " << r.requirement_id
           << " | " << (r.passed ? "✅ PASS" : "❌ FAIL")
           << " | " << std::fixed << std::setprecision(2) << r.elapsed_ms << " |\n";
+        if (!r.passed && !r.failure_message.empty()) {
+            failure_buf << "\n### " << r.suite_name << "." << r.test_name << "\n";
+            failure_buf << "```\n" << r.failure_message << "\n```\n";
+        }
     }
 
-    // 失敗詳細
-    bool has_failure = false;
-    for (const auto& r : results_) {
-        if (!r.passed && !r.failure_message.empty()) {
-            if (!has_failure) {
-                f << "\n## Failure Details\n";
-                has_failure = true;
-            }
-            f << "\n### " << r.suite_name << "." << r.test_name << "\n";
-            f << "```\n" << r.failure_message << "\n```\n";
-        }
+    // 失敗詳細セクション（1件以上あるときのみ出力）
+    std::string failures = failure_buf.str();
+    if (!failures.empty()) {
+        f << "\n## Failure Details\n";
+        f << failures;
     }
 }

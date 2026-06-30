@@ -25,13 +25,13 @@ bool LogParser::parse_line(const std::string& line, LogEntry& entry) {
         try {
             entry.value = std::stod(entry.message.substr(eq + 1));
             entry.has_value = true;
-        } catch (...) {
+        } catch (const std::invalid_argument&) {
+            entry.has_value = false;
+        } catch (const std::out_of_range&) {
             entry.has_value = false;
         }
-    } else {
-        entry.has_value = false;
-        entry.value = 0.0;
     }
+    // has_value=false / value=0.0 は LogEntry のデフォルト初期化で保証される
     return true;
 }
 
