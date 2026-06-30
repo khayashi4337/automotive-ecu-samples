@@ -113,7 +113,8 @@ def _run(cmd: list, env: "dict | None" = None, cwd: "Path | None" = None) -> tup
 
 
 def _exec_binary(binary: Path, args: "list | None" = None, *,
-                 env: "dict | None" = None, cwd: "Path | None" = None):
+                 env: "dict | None" = None,
+                 cwd: "Path | None" = None) -> "dict | tuple[int, str, str]":
     """バイナリの存在確認と実行をまとめる。
     存在しない場合は error dict、成功時は (rc, out, err) を返す。
     """

@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <fstream>
+#include <cstdio>
 #include "log_parser.h"
 
 // ──────────────── parse_line ────────────────
@@ -146,4 +148,27 @@ TEST(LogParserTest, FilterSkipsNoValueEntry) {
 TEST(LogParserTest, ParseFileNotFound) {
     EXPECT_THROW(LogParser::parse_file("nonexistent_file.log"),
                  std::runtime_error);
+}
+
+// 有効なファイルを渡すと全エントリを返すこと（正常系）
+TEST(LogParserTest, ParseFileValidContent) {
+    const char* tmp = "test_parse_file_tmp.log";
+    {
+        std::ofstream f(tmp);
+        f << "1.0 WARN ENGINE rpm=6200\n";
+        f << "# comment line\n";
+        f << "\n";
+        f << "2.0 INFO BRAKE pressure=50\n";
+    }
+
+    auto entries = LogParser::parse_file(tmp);
+    std::remove(tmp);
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_DOUBLE_EQ(entries[0].timestamp, 1.0);
+    EXPECT_EQ(entries[0].channel, "ENGINE");
+    EXPECT_TRUE(entries[0].has_value);
+    EXPECT_DOUBLE_EQ(entries[0].value, 6200.0);
+    EXPECT_DOUBLE_EQ(entries[1].timestamp, 2.0);
+    EXPECT_EQ(entries[1].channel, "BRAKE");
 }
