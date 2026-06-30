@@ -112,15 +112,23 @@ def _run(cmd: list, env: "dict | None" = None, cwd: "Path | None" = None) -> tup
     return result.returncode, result.stdout or "", result.stderr or ""
 
 
-def run_log_parser(build_dir: Path) -> dict:
-    t = _TOOL["log_parser"]
-    binary = build_dir / t["subdir"] / t["binary"]
-    sample  = SCRIPT_DIR / t["sample"]
-
+def _exec_binary(binary: Path, args: "list | None" = None, *,
+                 env: "dict | None" = None, cwd: "Path | None" = None):
+    """バイナリの存在確認と実行をまとめる。
+    存在しない場合は error dict、成功時は (rc, out, err) を返す。
+    """
     if not binary.exists():
         return {"status": "error", "message": f"not found: {binary}"}
+    return _run([str(binary)] + (args or []), env=env, cwd=cwd)
 
-    rc, out, err = _run([str(binary), str(sample)])
+
+def run_log_parser(build_dir: Path) -> dict:
+    t = _TOOL["log_parser"]
+    result = _exec_binary(build_dir / t["subdir"] / t["binary"],
+                          [str(SCRIPT_DIR / t["sample"])])
+    if isinstance(result, dict):
+        return result
+    rc, out, err = result
     if rc != 0:
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
@@ -145,13 +153,12 @@ def run_log_parser(build_dir: Path) -> dict:
 
 def run_gtest(build_dir: Path, env_tag: str) -> dict:
     t = _TOOL["gtest"]
-    binary = build_dir / t["subdir"] / t["binary"]
-
-    if not binary.exists():
-        return {"status": "error", "message": f"not found: {binary}"}
-
-    rc, out, err = _run([str(binary)], env={"ECU_TEST_ENV": env_tag},
-                        cwd=build_dir / t["subdir"])
+    result = _exec_binary(build_dir / t["subdir"] / t["binary"],
+                          env={"ECU_TEST_ENV": env_tag},
+                          cwd=build_dir / t["subdir"])
+    if isinstance(result, dict):
+        return result
+    rc, out, err = result
     if rc not in (0, 1):
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}",
                 "passed": 0, "failed": 0, "report_md": "", "raw": out}
@@ -179,13 +186,11 @@ def run_gtest(build_dir: Path, env_tag: str) -> dict:
 
 def run_can_parser(build_dir: Path) -> dict:
     t = _TOOL["can_parser"]
-    binary = build_dir / t["subdir"] / t["binary"]
-    sample  = SCRIPT_DIR / t["sample"]
-
-    if not binary.exists():
-        return {"status": "error", "message": f"not found: {binary}"}
-
-    rc, out, err = _run([str(binary), str(sample)])
+    result = _exec_binary(build_dir / t["subdir"] / t["binary"],
+                          [str(SCRIPT_DIR / t["sample"])])
+    if isinstance(result, dict):
+        return result
+    rc, out, err = result
     if rc != 0:
         return {"status": "error", "message": err.strip() or f"exited with rc={rc}"}
 
@@ -552,7 +557,7 @@ def _check_prerequisites(cfg: dict) -> bool:
     if sys.platform == "win32" and msys2 and not _path_contains(check_env.get("PATH", ""), msys2):
         check_env["PATH"] = msys2 + os.pathsep + check_env.get("PATH", "")
 
-    def _cmd_ok(cmd: list) -> bool:
+    def cmd_ok(cmd: list) -> bool:
         try:
             return subprocess.run(cmd, capture_output=True, env=check_env).returncode == 0
         except FileNotFoundError:
@@ -561,102 +566,99 @@ def _check_prerequisites(cfg: dict) -> bool:
     items: list = []  # (icon, label, advice)
     all_ok = True
 
+    def add(icon: str, label: str, advice: str = "") -> None:
+        nonlocal all_ok
+        items.append((icon, label, advice))
+        if icon == "NG":
+            all_ok = False
+
     # 1. Python バージョン
     major, minor = sys.version_info.major, sys.version_info.minor
     if (major, minor) >= (3, 8):
-        items.append(("OK", f"Python {major}.{minor}", ""))
+        add("OK", f"Python {major}.{minor}")
     else:
-        items.append(("NG", f"Python {major}.{minor}",
-                      "Python 3.8 以上が必要です。https://www.python.org/ からインストールしてください。"))
-        all_ok = False
+        add("NG", f"Python {major}.{minor}",
+            "Python 3.8 以上が必要です。https://www.python.org/ からインストールしてください。")
 
     # 2. MSYS2_BIN ディレクトリ（Windows のみ）
     msys2_bin_ok = True
     if sys.platform == "win32":
         msys2_path = Path(cfg["msys2_bin"])
         if msys2_path.is_dir():
-            items.append(("OK", f"MSYS2_BIN  {msys2_path}", ""))
+            add("OK", f"MSYS2_BIN  {msys2_path}")
         else:
-            items.append(("NG", f"MSYS2_BIN  {msys2_path}",
-                          "ディレクトリが見つかりません。\n"
-                          "対処: MSYS2 (https://www.msys2.org/) をインストールし、\n"
-                          "      ecu_eval_config.json の msys2_bin を実際のパスに変更してください。"))
-            all_ok = False
+            add("NG", f"MSYS2_BIN  {msys2_path}",
+                "ディレクトリが見つかりません。\n"
+                "対処: MSYS2 (https://www.msys2.org/) をインストールし、\n"
+                "      ecu_eval_config.json の msys2_bin を実際のパスに変更してください。")
             msys2_bin_ok = False
 
     # 3. g++ コンパイラ
     if sys.platform == "win32":
         if not msys2_bin_ok:
-            # MSYS2_BIN が存在しない場合、g++ の確認は意味がないのでスキップ
-            items.append(("NG", "g++        (MSYS2_BIN 未確立のためスキップ)", ""))
-            all_ok = False
+            add("NG", "g++        (MSYS2_BIN 未確立のためスキップ)")
         else:
             gpp = msys2_path / "g++.exe"
             if gpp.exists():
-                items.append(("OK", f"g++        {gpp}", ""))
+                add("OK", f"g++        {gpp}")
             else:
-                items.append(("NG", f"g++        {gpp}",
-                              "MinGW-w64 ツールチェーンが見つかりません。\n"
-                              "対処: MSYS2 ターミナルで以下を実行してください:\n"
-                              "      pacman -S mingw-w64-x86_64-gcc"))
-                all_ok = False
+                add("NG", f"g++        {gpp}",
+                    "MinGW-w64 ツールチェーンが見つかりません。\n"
+                    "対処: MSYS2 ターミナルで以下を実行してください:\n"
+                    "      pacman -S mingw-w64-x86_64-gcc")
     else:
-        if _cmd_ok(["g++", "--version"]):
-            items.append(("OK", "g++", ""))
+        if cmd_ok(["g++", "--version"]):
+            add("OK", "g++")
         else:
-            items.append(("NG", "g++  not found",
-                          "対処: sudo apt install g++  (または brew install gcc)"))
-            all_ok = False
+            add("NG", "g++  not found",
+                "対処: sudo apt install g++  (または brew install gcc)")
 
     # 4. CMake
-    if _cmd_ok(["cmake", "--version"]):
-        items.append(("OK", "cmake", ""))
+    if cmd_ok(["cmake", "--version"]):
+        add("OK", "cmake")
     else:
-        items.append(("NG", "cmake  not found",
-                      "対処(MSYS2): pacman -S mingw-w64-x86_64-cmake\n"
-                      "対処(直接):  https://cmake.org/download/ からインストールしてください。"))
-        all_ok = False
+        add("NG", "cmake  not found",
+            "対処(MSYS2): pacman -S mingw-w64-x86_64-cmake\n"
+            "対処(直接):  https://cmake.org/download/ からインストールしてください。")
 
     # 5. Ninja（推奨・必須ではない）
-    if _cmd_ok(["ninja", "--version"]):
-        items.append(("OK", "ninja", ""))
+    if cmd_ok(["ninja", "--version"]):
+        add("OK", "ninja")
     else:
-        items.append(("WN", "ninja  not found",
-                      "必須ではありませんが、推奨ビルドツールです。\n"
-                      "対処(MSYS2): pacman -S mingw-w64-x86_64-ninja\n"
-                      "ninja なしでビルドする場合(MSYS2 Make):\n"
-                      "  cmake -S . -B build -G \"MSYS Makefiles\"\n"
-                      "  cmake --build build"))
+        add("WN", "ninja  not found",
+            "必須ではありませんが、推奨ビルドツールです。\n"
+            "対処(MSYS2): pacman -S mingw-w64-x86_64-ninja\n"
+            "ninja なしでビルドする場合(MSYS2 Make):\n"
+            "  cmake -S . -B build -G \"MSYS Makefiles\"\n"
+            "  cmake --build build")
 
     # 6. サンプルファイル
     for key in ("log_parser", "can_parser"):
         sample = SCRIPT_DIR / cfg["tools"][key]["sample"]
         if sample.exists():
-            items.append(("OK", f"sample     {sample.name}", ""))
+            add("OK", f"sample     {sample.name}")
         else:
-            items.append(("NG", f"sample     {sample}",
-                          "サンプルファイルが見つかりません。\n"
-                          "対処: リポジトリが完全にクローンされているか確認してください。"))
-            all_ok = False
+            add("NG", f"sample     {sample}",
+                "サンプルファイルが見つかりません。\n"
+                "対処: リポジトリが完全にクローンされているか確認してください。")
 
     # 7. ビルドディレクトリ
     build_dir = SCRIPT_DIR / cfg["build_dir"]
     if build_dir.is_dir():
-        items.append(("OK", f"build dir  {build_dir}", ""))
+        add("OK", f"build dir  {build_dir}")
     else:
-        items.append(("WN", f"build dir  {build_dir}  (未作成)",
-                      "初回ビルドが必要です。以下を実行してください:\n"
-                      "  cmake -S . -B build -G Ninja\n"
-                      "  cmake --build build"))
+        add("WN", f"build dir  {build_dir}  (未作成)",
+            "初回ビルドが必要です。以下を実行してください:\n"
+            "  cmake -S . -B build -G Ninja\n"
+            "  cmake --build build")
 
     # ── 結果表示 ──
     icon_map = {"OK": "✅", "NG": "❌", "WN": "⚠️ "}
     print("=== 前提条件チェック ===")
     for status, label, advice in items:
         print(f"  {icon_map[status]} {label}")
-        if advice:
-            for line in advice.splitlines():
-                print(f"        {line}")
+        for advice_line in advice.splitlines():
+            print(f"        {advice_line}")
     print()
 
     if not all_ok:
