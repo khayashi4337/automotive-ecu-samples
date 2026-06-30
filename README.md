@@ -18,6 +18,19 @@ SiLS（Software in the Loop Simulation）環境での動作を前提に設計し
 
 ---
 
+## Skills Demonstrated
+
+このポートフォリオは、車載ECUソフトウェア評価エンジニアとして必要なスキルを実装で示すことを目的としています。
+
+| ツール | 示すスキル | 評価業務での対応作業 |
+|---|---|---|
+| **01 Log Parser** | ECUログの自動解析・閾値超過検出 | テスト中のECU出力ログから異常値を抽出し、評価レポートに記録する |
+| **02 GTest Reporter** | テスト結果と要件IDのトレーサビリティ | テストケースを要件仕様書と対応付け、ISO 26262等の機能安全規格への適合証跡を生成する |
+| **03 CAN Parser** | CANバス通信プロトコルの実装レベル理解 | SiLS/HiLS環境でECU間の通信フレームをキャプチャし、信号値を検証する |
+| **ecu_eval.py** | 評価フロー全体の自動化・統合レポート生成 | 複数ツールの実行・結果集約・ダッシュボード出力を一括で行い、評価工数を削減する |
+
+---
+
 ## Tech Stack
 
 | | |
@@ -27,6 +40,92 @@ SiLS（Software in the Loop Simulation）環境での動作を前提に設計し
 | Test | GoogleTest 1.17 |
 | Compiler | GCC 16 (MinGW-w64 via MSYS2) |
 | Platform | Windows 11 / Linux compatible |
+
+---
+
+## Quickstart — ゼロから動かす手順
+
+クローンから統合レポート生成まで、順番に実行します。
+
+### Step 1: リポジトリをクローン
+
+```bash
+git clone https://github.com/khayashi4337/automotive-ecu-samples.git
+cd automotive-ecu-samples
+```
+
+### Step 2: 前提ツールをインストール（MSYS2 on Windows）
+
+```bash
+pacman -S --noconfirm \
+  mingw-w64-x86_64-gcc \
+  mingw-w64-x86_64-cmake \
+  mingw-w64-x86_64-ninja \
+  mingw-w64-x86_64-gtest
+```
+
+### Step 3: ビルド
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+### Step 4: 前提条件チェック付きで統合評価を実行
+
+```bash
+python ecu_eval.py --env SiLS
+```
+
+起動時に環境チェックが走り、問題があれば対処法を表示します。
+
+```
+=== 前提条件チェック ===
+  ✅ Python 3.x
+  ✅ MSYS2_BIN  C:\msys64\mingw64\bin
+  ✅ g++        C:\msys64\mingw64\bin\g++.exe
+  ✅ cmake
+  ✅ ninja
+  ✅ sample     sample.log
+  ✅ build dir  build
+
+=== ECU Evaluation Suite ===
+[1/3] Log Parser ...   ✅ OK  entries=7  alerts=2
+[2/3] GTest Reporter ...  ⚠️ 1 FAILED  passed=4  failed=1
+[3/3] CAN Parser ...   ✅ OK  decoded=4  unknown=1
+Generating report    -> ecu_eval_report.md
+Generating dashboard -> ecu_eval_report.html
+Done.
+```
+
+### Step 5: レポートを確認
+
+- `ecu_eval_report.md` — Markdownレポート（テキストエディタで確認）
+- `ecu_eval_report.html` — HTMLダッシュボード（ブラウザで開く）
+
+### Step 6: 各ツールを単体で確認（任意）
+
+```bash
+# 01: ログパーサー単体
+./build/01_log_parser/log_parser_bin 01_log_parser/sample.log
+
+# 02: GTestレポーター単体
+ECU_TEST_ENV=SiLS ./build/02_gtest_reporter/sample_ecu_test
+
+# 03: CANパーサー単体
+./build/03_can_parser/can_parser_bin 03_can_parser/sample.can
+```
+
+### Step 7: ユニットテストを実行
+
+```bash
+cmake --build build --target test
+```
+
+```
+LogParserTest   : 4/4  PASSED
+CanParserTest   : 6/6  PASSED
+```
 
 ---
 
